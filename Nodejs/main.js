@@ -1,6 +1,8 @@
 const http = require('http');
 const fs = require('fs');
 const qs = require('querystring');
+const path = require('path');
+const sanitizeHtml = require('sanitize-html');
 
 function paintHtml(title, fileList, body, control) {
   return `
@@ -52,13 +54,16 @@ const app = http.createServer((request,response) => {
     else {
       fs.readdir(targetDir, (error, files) => {
         const fileList = makeFileList(files);
-        fs.readFile(`../Data/${title}`, 'utf8', (err, description) => {
-          const template = paintHtml(title, fileList, 
-            `<h2>${title}</h2><p>${description}</p>`,
+        const filteredtitle = path.parse(title).base;
+        fs.readFile(`../Data/${filteredtitle}`, 'utf8', (err, description) => {
+          const sanitizedTitle = sanitizeHtml(title);
+          const sanitizedDescription = sanitizeHtml(description);
+          const template = paintHtml(sanitizedTitle, fileList, 
+            `<h2>${sanitizedTitle}</h2><p>${sanitizedDescription}</p>`,
             `<a href="/create">create</a> 
-            <a href="/update?id=${title}">update</a> 
+            <a href="/update?id=${sanitizedTitle}">update</a> 
             <form action = "deleteProcess" method = "post">
-              <input type = "hidden" name = "id" value ="${title}">
+              <input type = "hidden" name = "id" value ="${sanitizedTitle}">
               <input type = "submit" value = "delete">
             </form>`);
           response.writeHead(200);
@@ -103,7 +108,8 @@ const app = http.createServer((request,response) => {
   }
   else if(pathname === '/update'){
     fs.readdir(targetDir, function(error, files){
-      fs.readFile(`../Data/${title}`, 'utf8', function(err, description){
+      const filteredtitle = path.parse(title).base;
+      fs.readFile(`../Data/${filteredtitle}`, 'utf8', function(err, description){
         title = reqUrl.searchParams.get('id');
         const fileList = makeFileList(files);
         const template = paintHtml(title, fileList,
