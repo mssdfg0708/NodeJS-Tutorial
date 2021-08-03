@@ -3,6 +3,15 @@ const fs = require('fs');
 const qs = require('querystring');
 const path = require('path');
 const sanitizeHtml = require('sanitize-html');
+const mysql = require('mysql');
+const db = mysql.createConnection({
+  host     : 'localhost',
+  user     : 'root',
+  password : '8535148',
+  database : 'opentuto'
+});
+
+db.connect();
 
 function paintHtml(title, fileList, body, control) {
   return `
@@ -25,7 +34,7 @@ function paintHtml(title, fileList, body, control) {
 function makeFileList(files) {
   let fileList = '<ul>';
   files.forEach(file => {
-      fileList += `<li><a href="/?id=${file}">${file}</a></li>`;
+      fileList += `<li><a href="/?id=${file.id}">${file.title}</a></li>`;
   });
   fileList += '</ul>';
   return fileList
@@ -40,32 +49,41 @@ const app = http.createServer((request,response) => {
   
   if(pathname === '/'){
     if (title === null) {
-      fs.readdir(targetDir, (error, files) => {
+      db.query('SELECT * FROM topic', function (error, queryResults) {
+        if (error) {
+            console.log('Error : ' + error);
+        }
         title = 'Welcome';
         const description = 'Hello Nodejs';
-        const fileList = makeFileList(files);
+        const fileList = makeFileList(queryResults);
         const template = paintHtml(title, fileList, 
           `<h2>${title}</h2><p>${description}</p>`,
           `<a href = "/create">create</a>`);
         response.writeHead(200);
         response.end(template);
-      })
+    });
     } 
     else {
-      fs.readdir(targetDir, (error, files) => {
-        const fileList = makeFileList(files);
-        const filteredtitle = path.parse(title).base;
-        fs.readFile(`../Data/${filteredtitle}`, 'utf8', (err, description) => {
-          const sanitizedTitle = sanitizeHtml(title);
-          const sanitizedDescription = sanitizeHtml(description);
-          const template = paintHtml(sanitizedTitle, fileList, 
-            `<h2>${sanitizedTitle}</h2><p>${sanitizedDescription}</p>`,
-            `<a href="/create">create</a> 
-            <a href="/update?id=${sanitizedTitle}">update</a> 
-            <form action = "deleteProcess" method = "post">
-              <input type = "hidden" name = "id" value ="${sanitizedTitle}">
-              <input type = "submit" value = "delete">
-            </form>`);
+      db.query('SELECT * FROM topic', function (error, queryResults) {
+        if(error) {
+          throw error;
+        }
+        db.query(`SELECT * FROM topic WHERE id=?`,[title], function (error2, queryResult) {
+          if(error2) {
+              throw error2
+          }
+          title = queryResult[0].title;
+          console.log(title);
+          const description = queryResult[0].description;
+          const fileList = makeFileList(queryResults);
+          const template = paintHtml(title, fileList, 
+            `<h2>${title}</h2><p>${description}</p>`,
+            `<a href = "/create">create</a>
+              <a href="/update?id=${title}">update</a> 
+              <form action = "deleteProcess" method = "post">
+                <input type = "hidden" name = "id" value ="${title}">
+                <input type = "submit" value = "delete">
+              </form>`);
           response.writeHead(200);
           response.end(template);
         })
