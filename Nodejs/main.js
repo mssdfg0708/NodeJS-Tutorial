@@ -91,11 +91,13 @@ const app = http.createServer((request,response) => {
     }
   }
   else if(pathname === '/create') {
-    fs.readdir(targetDir, (error, files) => {
-      title = 'WEB1 - create';
-      const fileList = makeFileList(files);
-      const template = paintHtml(title, fileList, `
-      <form action="/createProcess" method="post">
+    db.query('SELECT * FROM topic', function (error, queryResults) {
+      if (error) {
+          console.log('Error : ' + error);
+      }
+      const fileList = makeFileList(queryResults);
+      const template = paintHtml('', fileList, 
+      `<form action="/createProcess" method="post">
         <p><input type="text" name="title" placeholder="title"></p>
         <p>
           <textarea name="description" placeholder="description"></textarea>
@@ -107,7 +109,7 @@ const app = http.createServer((request,response) => {
       `, '');
       response.writeHead(200);
       response.end(template);
-    });
+    });   
   }
   else if (pathname === '/createProcess') {
     let body = '';
@@ -116,12 +118,24 @@ const app = http.createServer((request,response) => {
     });
     request.on('end', () => {
       const post = qs.parse(body);
-      const title = post.title;
-      const description = post.description;
-      fs.writeFile(`../Data/${title}`, description, 'utf8', (err) => {
-        response.writeHead(302, {Location: `/?id=${title}`});
+      // const title = post.title;
+      // const description = post.description;
+      // fs.writeFile(`../Data/${title}`, description, 'utf8', (err) => {
+      //   response.writeHead(302, {Location: `/?id=${title}`});
+      //   response.end();
+      // })
+      db.query(`
+      INSERT INTO topic (title, description, created, author_id) 
+        VALUES(?, ?, NOW(), ?)`,
+      [post.title, post.description, 1], 
+      function(error, result){
+        if(error){
+          throw error;
+        }
+        response.writeHead(302, {Location: `/?id=${result.insertId}`});
         response.end();
-      })
+      }
+    )
     });
   }
   else if(pathname === '/update'){
