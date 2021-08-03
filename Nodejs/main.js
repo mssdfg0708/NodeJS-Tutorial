@@ -51,7 +51,7 @@ const app = http.createServer((request,response) => {
     if (title === null) {
       db.query('SELECT * FROM topic', function (error, queryResults) {
         if (error) {
-            console.log('Error : ' + error);
+            throw error
         }
         title = 'Welcome';
         const description = 'Hello Nodejs';
@@ -93,7 +93,7 @@ const app = http.createServer((request,response) => {
   else if(pathname === '/create') {
     db.query('SELECT * FROM topic', function (error, queryResults) {
       if (error) {
-          console.log('Error : ' + error);
+          throw error
       }
       const fileList = makeFileList(queryResults);
       const template = paintHtml('', fileList, 
@@ -139,25 +139,51 @@ const app = http.createServer((request,response) => {
     });
   }
   else if(pathname === '/update'){
-    fs.readdir(targetDir, function(error, files){
-      const filteredtitle = path.parse(title).base;
-      fs.readFile(`../Data/${filteredtitle}`, 'utf8', function(err, description){
-        title = reqUrl.searchParams.get('id');
-        const fileList = makeFileList(files);
-        const template = paintHtml(title, fileList,
-          `
+    // fs.readdir(targetDir, function(error, files){
+    //   const filteredtitle = path.parse(title).base;
+    //   fs.readFile(`../Data/${filteredtitle}`, 'utf8', function(err, description){
+    //     title = reqUrl.searchParams.get('id');
+    //     const fileList = makeFileList(files);
+    //     const template = paintHtml(title, fileList,
+    //       `
+    //       <form action="/updateProcess" method="post">
+    //         <input type="hidden" name="id" value="${title}">
+    //         <p><input type="text" name="title" placeholder="title" value="${title}"></p>
+    //         <p>
+    //           <textarea name="description" placeholder="description">${description}</textarea>
+    //         </p>
+    //         <p>
+    //           <input type="submit",  value = "save">
+    //         </p>
+    //       </form>
+    //       `, ''
+    //     );
+    //     response.writeHead(200);
+    //     response.end(template);
+    //   });
+    // });
+    db.query('SELECT * FROM topic', function(error, queryResults){
+      if (error) {
+        throw error;
+      }
+      db.query(`SELECT * FROM topic WHERE title = ?`, [title], function(error2, queryResult){
+        if (error2){
+          throw error2;
+        }
+        const fileList = makeFileList(queryResults);
+        const template = paintHtml(queryResult[0].title, fileList,
+           `
           <form action="/updateProcess" method="post">
-            <input type="hidden" name="id" value="${title}">
-            <p><input type="text" name="title" placeholder="title" value="${title}"></p>
+            <input type="hidden" name="id" value="${queryResult[0].id}">
+            <p><input type="text" name="title" placeholder="title" value="${queryResult[0].title}"></p>
             <p>
-              <textarea name="description" placeholder="description">${description}</textarea>
+              <textarea name="description" placeholder="description">${queryResult[0].description}</textarea>
             </p>
             <p>
               <input type="submit",  value = "save">
             </p>
           </form>
-          `, ''
-        );
+          `, '');
         response.writeHead(200);
         response.end(template);
       });
@@ -170,14 +196,19 @@ const app = http.createServer((request,response) => {
     });
     request.on('end', () => {
       const post = qs.parse(body);
-      const id = post.id;
-      const title = post.title;
-      const description = post.description;
-      fs.rename(`../Data/${id}`, `../Data/${title}`, (err) => {
-        fs.writeFile(`../Data/${title}`, description, 'utf8', (err) => {
-          response.writeHead(302, {Location: `/?id=${title}`});
-          response.end();
-        })
+      console.log(post);
+      // const id = post.id;
+      // const title = post.title;
+      // const description = post.description;
+      // fs.rename(`../Data/${id}`, `../Data/${title}`, (err) => {
+      //   fs.writeFile(`../Data/${title}`, description, 'utf8', (err) => {
+      //     response.writeHead(302, {Location: `/?id=${title}`});
+      //     response.end();
+      //   })
+      // })
+      db.query('UPDATE topic SET title=?, description=?, author_id=1 WHERE id=?', [post.title, post.description, post.id], function(error, result){
+        response.writeHead(302, {Location: `/?id=${post.id}`});
+        response.end();
       })
     })
   }
