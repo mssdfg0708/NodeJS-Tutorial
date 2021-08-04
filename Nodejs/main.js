@@ -39,6 +39,24 @@ function makeFileList(files) {
   fileList += '</ul>';
   return fileList
 }
+
+function authorSelect(authorsQuery, author_id){
+  authorsString = '';
+  for (i=0; i < authorsQuery.length; i++){
+    let selected = '';
+    if (authorsQuery[i].id === author_id){
+      selected = ' selected';
+    }
+    authorsString +=`<option value = '${authorsQuery[i].id}'${selected}>${authorsQuery[i].name}</option>`
+  }
+
+  return`
+  <p>
+  <select name = 'author'>
+    ${authorsString}
+  </select>
+  </P>`
+}
  
 const app = http.createServer((request,response) => {
   const baseURL = 'http://' + request.headers.host + '/';
@@ -71,7 +89,7 @@ const app = http.createServer((request,response) => {
         if(error) {
           throw error;
         }
-        db.query(`SELECT * FROM topic WHERE id=?`,[queryID], function (error2, queryResult) {
+        db.query(`SELECT * FROM topic LEFT JOIN author ON topic.author_id = author.id WHERE topic.id = ?`,[queryID], function (error2, queryResult) {
           if(error2) {
               throw error2
           }
@@ -79,7 +97,8 @@ const app = http.createServer((request,response) => {
           const description = queryResult[0].description;
           const fileList = makeFileList(queryResults);
           const template = paintHtml(title, fileList, 
-            `<h2>${title}</h2><p>${description}</p>`,
+            `<h2>${title}</h2><p>${description}</p>
+             <p>by ${queryResult[0].name}</p>`,
             `<a href = "/create">create</a>
               <a href="/update?id=${queryID}">update</a> 
               <form action = "deleteProcess" method = "post">
@@ -98,20 +117,26 @@ const app = http.createServer((request,response) => {
       if (error) {
           throw error
       }
-      const fileList = makeFileList(queryResults);
-      const template = paintHtml('', fileList, 
-      `<form action="/createProcess" method="post">
-        <p><input type="text" name="title" placeholder="title"></p>
-        <p>
-          <textarea name="description" placeholder="description"></textarea>
-        </p>
-        <p>
-          <input type="submit", value = "save">
-        </p>
-      </form>
-      `, '');
-      response.writeHead(200);
-      response.end(template);
+      db.query('SELECT * FROM author', (error2, authorsQuery) => {
+        if (error2) {
+          throw error2
+        }
+        const fileList = makeFileList(queryResults);
+        const template = paintHtml('', fileList, 
+        `<form action="/createProcess" method="post">
+          <p><input type="text" name="title" placeholder="title"></p>
+          <p>
+            <textarea name="description" placeholder="description"></textarea>
+          </p>
+          ${authorSelect(authorsQuery)}
+          <p>
+            <input type="submit", value = "save">
+          </p>
+        </form>
+        `, '');
+        response.writeHead(200);
+        response.end(template);
+      })
     });   
   }
   else if (pathname === '/createProcess') {
@@ -130,7 +155,7 @@ const app = http.createServer((request,response) => {
       db.query(`
       INSERT INTO topic (title, description, created, author_id) 
         VALUES(?, ?, NOW(), ?)`,
-      [post.title, post.description, 1], 
+      [post.title, post.description, post.author], 
       function(error, result){
         if(error){
           throw error;
@@ -142,29 +167,6 @@ const app = http.createServer((request,response) => {
     });
   }
   else if(pathname === '/update'){
-    // fs.readdir(targetDir, function(error, files){
-    //   const filteredtitle = path.parse(title).base;
-    //   fs.readFile(`../Data/${filteredtitle}`, 'utf8', function(err, description){
-    //     title = reqUrl.searchParams.get('id');
-    //     const fileList = makeFileList(files);
-    //     const template = paintHtml(title, fileList,
-    //       `
-    //       <form action="/updateProcess" method="post">
-    //         <input type="hidden" name="id" value="${title}">
-    //         <p><input type="text" name="title" placeholder="title" value="${title}"></p>
-    //         <p>
-    //           <textarea name="description" placeholder="description">${description}</textarea>
-    //         </p>
-    //         <p>
-    //           <input type="submit",  value = "save">
-    //         </p>
-    //       </form>
-    //       `, ''
-    //     );
-    //     response.writeHead(200);
-    //     response.end(template);
-    //   });
-    // });
     db.query('SELECT * FROM topic', function(error, queryResults){
       if (error) {
         throw error;
@@ -173,22 +175,30 @@ const app = http.createServer((request,response) => {
         if (error2){
           throw error2;
         }
-        const fileList = makeFileList(queryResults);
-        const template = paintHtml(queryResult[0].title, fileList,
-           `
-          <form action="/updateProcess" method="post">
-            <input type="hidden" name="id" value="${queryResult[0].id}">
-            <p><input type="text" name="title" placeholder="title" value="${queryResult[0].title}"></p>
-            <p>
-              <textarea name="description" placeholder="description">${queryResult[0].description}</textarea>
-            </p>
-            <p>
-              <input type="submit",  value = "save">
-            </p>
-          </form>
-          `, '');
-        response.writeHead(200);
-        response.end(template);
+        db.query('SELECT * FROM author', (error3, authorsQuery) => {
+          if (error3) {
+            throw error3
+          }
+          const fileList = makeFileList(queryResults);
+          const template = paintHtml(queryResult[0].title, fileList,
+             `
+            <form action="/updateProcess" method="post">
+              <input type="hidden" name="id" value="${queryResult[0].id}">
+              <p><input type="text" name="title" placeholder="title" value="${queryResult[0].title}"></p>
+              <p>
+                <textarea name="description" placeholder="description">${queryResult[0].description}</textarea>
+              </p>
+              <p>
+              ${authorSelect(authorsQuery, queryResult[0].author_id)}
+              </p>
+              <p>
+                <input type="submit",  value = "save">
+              </p>
+            </form>
+            `, '');
+          response.writeHead(200);
+          response.end(template);
+        });
       });
     });
   }
@@ -208,7 +218,7 @@ const app = http.createServer((request,response) => {
       //     response.end();
       //   })
       // })
-      db.query('UPDATE topic SET title=?, description=?, author_id=1 WHERE id=?', [post.title, post.description, post.id], function(error, result){
+      db.query('UPDATE topic SET title=?, description=?, author_id=? WHERE id=?', [post.title, post.description, post.author, post.id], function(error, result){
         response.writeHead(302, {Location: `/?id=${post.id}`});
         response.end();
       })
