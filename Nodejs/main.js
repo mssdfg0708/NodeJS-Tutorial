@@ -45,10 +45,12 @@ const app = http.createServer((request,response) => {
   const reqUrl = new URL(request.url,baseURL);
   const pathname = reqUrl.pathname;
   const targetDir = '../Data';
+  const queryID = reqUrl.searchParams.get('id');
   let title = reqUrl.searchParams.get('id');
   
   if(pathname === '/'){
-    if (title === null) {
+
+    if (queryID === null) {
       db.query('SELECT * FROM topic', function (error, queryResults) {
         if (error) {
             throw error
@@ -62,26 +64,26 @@ const app = http.createServer((request,response) => {
         response.writeHead(200);
         response.end(template);
     });
-    } 
+    }
+
     else {
       db.query('SELECT * FROM topic', function (error, queryResults) {
         if(error) {
           throw error;
         }
-        db.query(`SELECT * FROM topic WHERE id=?`,[title], function (error2, queryResult) {
+        db.query(`SELECT * FROM topic WHERE id=?`,[queryID], function (error2, queryResult) {
           if(error2) {
               throw error2
           }
           title = queryResult[0].title;
-          console.log(title);
           const description = queryResult[0].description;
           const fileList = makeFileList(queryResults);
           const template = paintHtml(title, fileList, 
             `<h2>${title}</h2><p>${description}</p>`,
             `<a href = "/create">create</a>
-              <a href="/update?id=${title}">update</a> 
+              <a href="/update?id=${queryID}">update</a> 
               <form action = "deleteProcess" method = "post">
-                <input type = "hidden" name = "id" value ="${title}">
+                <input type = "hidden" name = "id" value ="${queryID}">
                 <input type = "submit" value = "delete">
               </form>`);
           response.writeHead(200);
@@ -89,6 +91,7 @@ const app = http.createServer((request,response) => {
         })
       });
     }
+
   }
   else if(pathname === '/create') {
     db.query('SELECT * FROM topic', function (error, queryResults) {
@@ -166,7 +169,7 @@ const app = http.createServer((request,response) => {
       if (error) {
         throw error;
       }
-      db.query(`SELECT * FROM topic WHERE title = ?`, [title], function(error2, queryResult){
+      db.query(`SELECT * FROM topic WHERE id = ?`, [queryID], function(error2, queryResult){
         if (error2){
           throw error2;
         }
@@ -196,7 +199,6 @@ const app = http.createServer((request,response) => {
     });
     request.on('end', () => {
       const post = qs.parse(body);
-      console.log(post);
       // const id = post.id;
       // const title = post.title;
       // const description = post.description;
@@ -219,10 +221,10 @@ const app = http.createServer((request,response) => {
     });
     request.on('end', () => {
       const post = qs.parse(body);
-      console.log(post);
-      const id = post.id;
-      console.log(id);
-      fs.unlink(`../Data/${id}`, (err) => {
+      db.query('DELETE FROM topic WHERE id = ?', [post.id], (error, result) => {
+        if (error) {
+          throw error
+        }
         response.writeHead(302, {Location: `/`});
         response.end();
       })
